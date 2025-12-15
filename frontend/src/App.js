@@ -2,7 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-const WS_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:5000';
+// Use relative WebSocket URL to work through nginx proxy
+const WS_URL = process.env.REACT_APP_WS_URL || 
+  (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws';
 
 function App() {
   const [messages, setMessages] = useState([]);
