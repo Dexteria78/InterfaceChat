@@ -1,0 +1,50 @@
+name: Build and Push to ACR
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  ACR_LOGIN_SERVER: acrchatdevops.azurecr.io
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Login to Azure Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.ACR_LOGIN_SERVER }}
+        username: ${{ secrets.ACR_USERNAME }}
+        password: ${{ secrets.ACR_PASSWORD }}
+    
+    - name: Build and push backend image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.ACR_LOGIN_SERVER }}/chat-backend:latest
+          ${{ env.ACR_LOGIN_SERVER }}/chat-backend:${{ github.sha }}
+    
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v4
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.ACR_LOGIN_SERVER }}/chat-frontend:latest
+          ${{ env.ACR_LOGIN_SERVER }}/chat-frontend:${{ github.sha }}
+    
+    - name: Summary
+      run: |
+        echo "✅ Images pushed successfully to ACR!"
+        echo "Backend: ${{ env.ACR_LOGIN_SERVER }}/chat-backend:latest"
+        echo "Frontend: ${{ env.ACR_LOGIN_SERVER }}/chat-frontend:latest"
