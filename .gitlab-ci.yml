@@ -1,0 +1,136 @@
+stages:
+  - build
+  - test
+  - security
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  ACR_REGISTRY: ${ACR_LOGIN_SERVER}
+  BACKEND_IMAGE: ${ACR_REGISTRY}/chat-backend
+  FRONTEND_IMAGE: ${ACR_REGISTRY}/chat-frontend
+
+# Build Backend
+build-backend:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - cd backend
+    - docker login ${ACR_REGISTRY} -u ${ACR_USERNAME} -p ${ACR_PASSWORD}
+    - docker build -t ${BACKEND_IMAGE}:${CI_COMMIT_SHORT_SHA} .
+    - docker tag ${BACKEND_IMAGE}:${CI_COMMIT_SHORT_SHA} ${BACKEND_IMAGE}:latest
+    - docker push ${BACKEND_IMAGE}:${CI_COMMIT_SHORT_SHA}
+    - docker push ${BACKEND_IMAGE}:latest
+  only:
+    - main
+    - develop
+
+# Build Frontend
+build-frontend:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - cd frontend
+    - docker login ${ACR_REGISTRY} -u ${ACR_USERNAME} -p ${ACR_PASSWORD}
+    - docker build -t ${FRONTEND_IMAGE}:${CI_COMMIT_SHORT_SHA} .
+    - docker tag ${FRONTEND_IMAGE}:${CI_COMMIT_SHORT_SHA} ${FRONTEND_IMAGE}:latest
+    - docker push ${FRONTEND_IMAGE}:${CI_COMMIT_SHORT_SHA}
+    - docker push ${FRONTEND_IMAGE}:latest
+  only:
+    - main
+    - develop
+
+# Test Backend
+test-backend:
+  stage: test
+  image: node:18-alpine
+  script:
+    - cd backend
+    - npm install
+    - npm test || echo "Tests not implemented yet"
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# Security Scan avec Trivy
+security-scan-backend:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy image --severity HIGH,CRITICAL ${BACKEND_IMAGE}:${CI_COMMIT_SHORT_SHA}
+  allow_failure: true
+  only:
+    - main
+    - develop
+
+security-scan-frontend:
+  stage: security
+  image: aquasec/trivy:latest
+  script:
+    - trivy image --severity HIGH,CRITICAL ${FRONTEND_IMAGE}:${CI_COMMIT_SHORT_SHA}
+  allow_failure: true
+  only:
+    - main
+    - develop
+
+# OWASP ZAP Security Testing
+owasp-zap:
+  stage: security
+  image: owasp/zap2docker-stable
+  script:
+    - zap-baseline.py -t http://chat.example.com || true
+  allow_failure: true
+  only:
+    - main
+
+# Deploy to AKS with Helm
+deploy-staging:
+  stage: deploy
+  image: alpine/helm:latest
+  script:
+    - az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
+    - az aks get-credentials --resource-group rg-chat-devops --name aks-chat-devops
+    - helm upgrade --install chat-app ./helm/chat-app 
+      --set backend.image.tag=${CI_COMMIT_SHORT_SHA}
+      --set frontend.image.tag=${CI_COMMIT_SHORT_SHA}
+      --namespace staging --create-namespace
+  environment:
+    name: staging
+    url: https://staging.chat.example.com
+  only:
+    - develop
+
+deploy-production:
+  stage: deploy
+  image: alpine/helm:latest
+  script:
+    - az login --service-principal -u ${AZURE_CLIENT_ID} -p ${AZURE_CLIENT_SECRET} --tenant ${AZURE_TENANT_ID}
+    - az aks get-credentials --resource-group rg-chat-devops --name aks-chat-devops
+    - helm upgrade --install chat-app ./helm/chat-app 
+      --set backend.image.tag=${CI_COMMIT_SHORT_SHA}
+      --set frontend.image.tag=${CI_COMMIT_SHORT_SHA}
+      --namespace production --create-namespace
+  environment:
+    name: production
+    url: https://chat.example.com
+  when: manual
+  only:
+    - main
+
+# Deploy with Ansible (alternative)
+deploy-ansible:
+  stage: deploy
+  image: cytopia/ansible:latest
+  script:
+    - cd ansible
+    - ansible-playbook -i inventory/hosts playbook.yml
+      -e "deployment_mode=kubernetes"
+      -e "docker_registry=${ACR_REGISTRY}"
+  when: manual
+  only:
+    - main

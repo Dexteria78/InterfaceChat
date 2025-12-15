@@ -1,0 +1,73 @@
+---
+- name: Deploy Chat Application
+  hosts: k3s_cluster
+  become: yes
+  
+  vars:
+    app_name: chat-devops
+    docker_registry: "{{ lookup('env', 'ACR_LOGIN_SERVER') }}"
+    
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - docker.io
+          - docker-compose
+          - curl
+        state: present
+        update_cache: yes
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Install K3s (if not exists)
+      shell: |
+        curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Copy kubeconfig
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: ~/.kube/config
+        remote_src: yes
+        owner: "{{ ansible_user }}"
+        mode: '0600'
+
+    - name: Deploy application with docker-compose
+      docker_compose:
+        project_src: /opt/{{ app_name }}
+        state: present
+      when: deployment_mode == "docker"
+
+    - name: Apply Kubernetes manifests
+      shell: |
+        kubectl apply -f /opt/{{ app_name }}/helm/
+      when: deployment_mode == "kubernetes"
+
+- name: Configure monitoring
+  hosts: monitoring
+  become: yes
+  
+  tasks:
+    - name: Ensure Prometheus is running
+      docker_container:
+        name: prometheus
+        image: prom/prometheus:latest
+        state: started
+        ports:
+          - "9090:9090"
+        restart_policy: unless-stopped
+
+    - name: Ensure Grafana is running
+      docker_container:
+        name: grafana
+        image: grafana/grafana:latest
+        state: started
+        ports:
+          - "3001:3000"
+        restart_policy: unless-stopped
