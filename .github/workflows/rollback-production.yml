@@ -1,0 +1,230 @@
+name: Rollback Automatique en Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: 'Numéro de révision Helm à restaurer (laisser vide pour version précédente)'
+        required: false
+        type: string
+
+env:
+  AKS_CLUSTER: aks-chat-devops
+  AKS_RESOURCE_GROUP: rg-chat-devops
+  NAMESPACE: production
+
+jobs:
+  analyse-pre-rollback:
+    name: Analyse Avant Rollback
+    runs-on: ubuntu-latest
+    outputs:
+      current-revision: ${{ steps.info.outputs.revision }}
+      backup-created: ${{ steps.backup.outputs.created }}
+    steps:
+      - name: Connexion à Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configuration de kubectl
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_CLUSTER }}
+
+      - name: Récupération des informations actuelles
+        id: info
+        run: |
+          echo "📊 État actuel du déploiement:"
+          helm list -n production
+          
+          CURRENT_REV=$(helm list -n production -o json | jq -r '.[0].revision')
+          echo "revision=${CURRENT_REV}" >> $GITHUB_OUTPUT
+          echo "Révision actuelle: ${CURRENT_REV}"
+
+      - name: Historique des déploiements
+        run: |
+          echo "📜 Historique Helm:"
+          helm history chat-app -n production --max 10
+
+      - name: État des pods avant rollback
+        run: |
+          echo "🔍 État des pods:"
+          kubectl get pods -n production -o wide
+
+      - name: Backup de la configuration
+        id: backup
+        run: |
+          echo "💾 Création du backup..."
+          mkdir -p /tmp/backup
+          
+          kubectl get all,configmap,secret -n production -o yaml > /tmp/backup/production-state-$(date +%Y%m%d-%H%M%S).yaml
+          
+          echo "created=true" >> $GITHUB_OUTPUT
+          echo "✅ Backup créé"
+
+  execution-rollback:
+    name: Exécution du Rollback
+    runs-on: ubuntu-latest
+    needs: analyse-pre-rollback
+    environment:
+      name: production-rollback
+      url: http://4.178.25.91
+    steps:
+      - name: Connexion à Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configuration de kubectl
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_CLUSTER }}
+
+      - name: Rollback Helm
+        run: |
+          if [ -n "${{ inputs.revision }}" ]; then
+            echo "🔄 Rollback vers la révision ${{ inputs.revision }}..."
+            helm rollback chat-app ${{ inputs.revision }} -n production --wait --timeout=10m
+          else
+            echo "🔄 Rollback vers la révision précédente..."
+            helm rollback chat-app -n production --wait --timeout=10m
+          fi
+
+      - name: Vérification post-rollback
+        run: |
+          echo "⏳ Attente de la stabilisation des pods..."
+          sleep 30
+          
+          kubectl wait --for=condition=ready pod -l app=backend -n production --timeout=300s
+          kubectl wait --for=condition=ready pod -l app=frontend -n production --timeout=300s
+          
+          echo "✅ Tous les pods sont prêts"
+
+      - name: Tests de santé
+        run: |
+          echo "🏥 Vérification de la santé des services..."
+          
+          # Test du backend
+          kubectl run rollback-health-test-${{ github.run_id }} \
+            --image=curlimages/curl:latest \
+            --rm -i --restart=Never \
+            -n production -- \
+            curl -f http://chat-app-backend:5000/api/health --max-time 10
+          
+          echo "✅ Backend opérationnel après rollback"
+
+      - name: Vérification du frontend
+        run: |
+          FRONTEND_IP="4.178.25.91"
+          
+          echo "🌐 Test du frontend..."
+          for i in {1..5}; do
+            RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://${FRONTEND_IP}/ --max-time 10)
+            if [ "$RESPONSE" == "200" ]; then
+              echo "✅ Frontend accessible (tentative $i/5)"
+              break
+            else
+              echo "⏳ Tentative $i/5 - Code: $RESPONSE"
+              sleep 10
+            fi
+          done
+
+  verification-post-rollback:
+    name: Vérifications Après Rollback
+    runs-on: ubuntu-latest
+    needs: execution-rollback
+    steps:
+      - name: Connexion à Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Configuration de kubectl
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_CLUSTER }}
+
+      - name: État final des pods
+        run: |
+          echo "📊 État des pods après rollback:"
+          kubectl get pods -n production -o wide
+
+      - name: Logs récents
+        run: |
+          echo "📋 Logs backend (dernières lignes):"
+          kubectl logs -n production -l app=backend --tail=20
+          
+          echo ""
+          echo "📋 Logs frontend (dernières lignes):"
+          kubectl logs -n production -l app=frontend --tail=20
+
+      - name: Événements récents
+        run: |
+          echo "📰 Événements Kubernetes récents:"
+          kubectl get events -n production --sort-by='.lastTimestamp' | tail -15
+
+      - name: Révision finale
+        run: |
+          echo "📌 Révision Helm après rollback:"
+          helm list -n production
+          
+          NEW_REV=$(helm list -n production -o json | jq -r '.[0].revision')
+          echo "Nouvelle révision: ${NEW_REV}"
+          echo "Ancienne révision: ${{ needs.analyse-pre-rollback.outputs.current-revision }}"
+
+  rapport-rollback:
+    name: Rapport de Rollback
+    runs-on: ubuntu-latest
+    needs: [analyse-pre-rollback, execution-rollback, verification-post-rollback]
+    if: always()
+    steps:
+      - name: Génération du rapport
+        run: |
+          echo "========================================"
+          echo "       RAPPORT DE ROLLBACK             "
+          echo "========================================"
+          echo ""
+          echo "📅 Date: $(date)"
+          echo "🔄 Run ID: ${{ github.run_id }}"
+          echo "👤 Déclenché par: ${{ github.actor }}"
+          echo ""
+          echo "📊 Révisions:"
+          echo "  - Avant rollback: ${{ needs.analyse-pre-rollback.outputs.current-revision }}"
+          if [ -n "${{ inputs.revision }}" ]; then
+            echo "  - Cible du rollback: ${{ inputs.revision }}"
+          else
+            echo "  - Cible du rollback: Révision précédente"
+          fi
+          echo ""
+          echo "Statuts des opérations:"
+          echo "  - Analyse pré-rollback: ${{ needs.analyse-pre-rollback.result }}"
+          echo "  - Exécution rollback: ${{ needs.execution-rollback.result }}"
+          echo "  - Vérifications post-rollback: ${{ needs.verification-post-rollback.result }}"
+          echo ""
+          
+          if [ "${{ needs.execution-rollback.result }}" == "success" ] && \
+             [ "${{ needs.verification-post-rollback.result }}" == "success" ]; then
+            echo "✅ ROLLBACK RÉUSSI"
+            echo ""
+            echo "L'application a été restaurée à une version précédente stable."
+            echo ""
+            echo "🔗 Liens:"
+            echo "  - Application: http://4.178.25.91"
+            echo "  - Grafana: http://4.178.145.159:3000"
+          else
+            echo "❌ ROLLBACK ÉCHOUÉ"
+            echo ""
+            echo "⚠️ ATTENTION: Le rollback a rencontré des problèmes."
+            echo "Action immédiate requise!"
+          fi
+          echo "========================================"
+
+      - name: Notification d'échec
+        if: needs.execution-rollback.result != 'success'
+        run: |
+          echo "🚨 ALERTE CRITIQUE: Le rollback a échoué"
+          echo "Vérification manuelle requise immédiatement"
+          exit 1

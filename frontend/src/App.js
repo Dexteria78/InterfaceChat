@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://4.251.128.52:5000';
-const WS_URL = process.env.REACT_APP_WS_URL || 'ws://4.251.128.52:5000';
+// Configuration des URLs - utilise les chemins relatifs pour le proxy nginx
+const API_URL = '/api';
+const WS_URL = `ws://${window.location.host}/ws`;
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -21,7 +22,7 @@ function App() {
 
   useEffect(() => {
     // Charger l'historique des messages
-    fetch(`${API_URL}/api/messages`)
+    fetch(`${API_URL}/messages`)
       .then(res => res.json())
       .then(data => setMessages(data.messages || []))
       .catch(err => console.error('Error loading messages:', err));
@@ -31,13 +32,13 @@ function App() {
     websocketRef.current = websocket;
 
     websocket.onopen = () => {
-      console.log('✅ WebSocket connected');
+      console.log('WebSocket connected');
       setIsConnected(true);
     };
 
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
-      console.log('📩 WebSocket message received:', data);
+      console.log('WebSocket message received:', data);
       
       if (data.type === 'new_message') {
         setMessages(prev => [...prev, data.message]);
@@ -48,11 +49,11 @@ function App() {
     };
 
     websocket.onerror = (error) => {
-      console.error('❌ WebSocket error:', error);
+      console.error('WebSocket error:', error);
     };
 
     websocket.onclose = () => {
-      console.log('⚠️ WebSocket disconnected');
+      console.log('WebSocket disconnected');
       setIsConnected(false);
     };
 
@@ -75,7 +76,7 @@ function App() {
     setIsLoading(true);
 
     try {
-      await fetch(`${API_URL}/api/messages`, {
+      await fetch(`${API_URL}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: messageText, user: username })
@@ -94,7 +95,7 @@ function App() {
     <div className="App">
       <div className="chat-container">
         <div className="chat-header">
-          <h1>💬 Chat DevOps</h1>
+          <h1>Chat DevOps</h1>
           <div className="connection-status">
             <span className={`status-indicator ${isConnected ? 'connected' : 'disconnected'}`}></span>
             {isConnected ? 'Connecté' : 'Déconnecté'}
