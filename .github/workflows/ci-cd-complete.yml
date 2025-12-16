@@ -1,4 +1,4 @@
-name: 🚀 CI/CD Complete Pipeline
+name: CI/CD Complete Pipeline
 
 on:
   push:
@@ -20,35 +20,35 @@ jobs:
   # STAGE 0: CODE QUALITY
   # ═══════════════════════════════════════════════════
   code-quality:
-    name: 🔍 Code Quality & Linting
+    name: Code Quality & Linting
     runs-on: ubuntu-latest
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 📦 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: '**/package-lock.json'
 
-      - name: 🔍 Lint Backend
+      - name: Lint Backend
         working-directory: ./backend
         run: |
           npm install
-          npm run lint || echo "⚠️ Linting warnings found"
+          npm run lint || echo "WARNING: Linting warnings found"
 
-      - name: 🔍 Lint Frontend  
+      - name: Lint Frontend  
         working-directory: ./frontend
         run: |
           npm install
-          npm run lint || echo "⚠️ Linting warnings found"
+          npm run lint || echo "WARNING: Linting warnings found"
 
-      - name: 📊 SonarCloud Scan (Backend)
+      - name: SonarCloud Scan (Backend)
         uses: SonarSource/sonarcloud-github-action@master
         continue-on-error: true
         env:
@@ -64,7 +64,7 @@ jobs:
   # STAGE 1: BUILD & PUSH TO ACR
   # ═══════════════════════════════════════════════════
   build-and-push:
-    name: 🏗️ Build & Push to ACR
+    name: Build & Push to ACR
     runs-on: ubuntu-latest
     needs: code-quality
     outputs:
@@ -72,18 +72,18 @@ jobs:
       frontend-tag: ${{ steps.set-tags.outputs.frontend-tag }}
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔐 Azure Login
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: �� ACR Login
+      - name: ACR Login
         run: az acr login --name ${{ env.ACR_NAME }}
 
-      - name: 🏷️ Set image tags
+      - name: Set image tags
         id: set-tags
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
@@ -93,7 +93,7 @@ jobs:
           echo "frontend-tag=${FRONTEND_TAG}" >> $GITHUB_OUTPUT
           echo "short-sha=${SHORT_SHA}" >> $GITHUB_OUTPUT
 
-      - name: 🔨 Build Backend Image
+      - name: Build Backend Image
         run: |
           docker build -t ${{ steps.set-tags.outputs.backend-tag }} \
                        -t ${{ env.ACR_LOGIN_SERVER }}/chat-backend:latest \
@@ -101,7 +101,7 @@ jobs:
           docker push ${{ steps.set-tags.outputs.backend-tag }}
           docker push ${{ env.ACR_LOGIN_SERVER }}/chat-backend:latest
 
-      - name: 🔨 Build Frontend Image
+      - name: Build Frontend Image
         run: |
           docker build -t ${{ steps.set-tags.outputs.frontend-tag }} \
                        -t ${{ env.ACR_LOGIN_SERVER }}/chat-frontend:latest \
@@ -111,9 +111,9 @@ jobs:
           docker push ${{ steps.set-tags.outputs.frontend-tag }}
           docker push ${{ env.ACR_LOGIN_SERVER }}/chat-frontend:latest
 
-      - name: 📝 Image Manifest
+      - name: Image Manifest
         run: |
-          echo "## 🐳 Docker Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "## Docker Images Built" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Backend**: \`${{ steps.set-tags.outputs.backend-tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **Frontend**: \`${{ steps.set-tags.outputs.frontend-tag }}\`" >> $GITHUB_STEP_SUMMARY
@@ -123,30 +123,30 @@ jobs:
   # STAGE 2: TESTS
   # ═══════════════════════════════════════════════════
   test-backend:
-    name: 🧪 Test Backend
+    name: Test Backend
     runs-on: ubuntu-latest
     needs: build-and-push
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 📦 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: 'backend/package-lock.json'
 
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         working-directory: ./backend
         run: npm ci
 
-      - name: 🧪 Run Unit Tests
+      - name: Run Unit Tests
         working-directory: ./backend
-        run: npm test -- --coverage || echo "⚠️ Tests not fully implemented"
+        run: npm test -- --coverage || echo "WARNING: Tests not fully implemented"
 
-      - name: 📊 Upload Coverage
+      - name: Upload Coverage
         uses: codecov/codecov-action@v3
         continue-on-error: true
         with:
@@ -154,30 +154,30 @@ jobs:
           flags: backend
 
   test-frontend:
-    name: 🧪 Test Frontend
+    name: Test Frontend
     runs-on: ubuntu-latest
     needs: build-and-push
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 📦 Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: 'frontend/package-lock.json'
 
-      - name: 📦 Install dependencies
+      - name: Install dependencies
         working-directory: ./frontend
         run: npm ci
 
-      - name: 🧪 Run Unit Tests
+      - name: Run Unit Tests
         working-directory: ./frontend
-        run: CI=true npm test -- --coverage || echo "⚠️ Tests not fully implemented"
+        run: CI=true npm test -- --coverage || echo "WARNING: Tests not fully implemented"
 
-      - name: 📊 Upload Coverage
+      - name: Upload Coverage
         uses: codecov/codecov-action@v3
         continue-on-error: true
         with:
@@ -188,7 +188,7 @@ jobs:
   # STAGE 3: SECURITY SCANS
   # ═══════════════════════════════════════════════════
   security-scan:
-    name: 🔒 Security Scanning
+    name: Security Scanning
     runs-on: ubuntu-latest
     needs: build-and-push
     permissions:
@@ -200,18 +200,18 @@ jobs:
         component: [backend, frontend]
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔐 Azure Login
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: 🐳 ACR Login
+      - name: ACR Login
         run: az acr login --name ${{ env.ACR_NAME }}
 
-      - name: 🔍 Trivy Vulnerability Scan
+      - name: Trivy Vulnerability Scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ needs.build-and-push.outputs[format('{0}-tag', matrix.component)] }}
@@ -220,13 +220,13 @@ jobs:
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
 
-      - name: 📤 Upload to Security Tab
+      - name: Upload to Security Tab
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-${{ matrix.component }}.sarif'
 
-      - name: 🔍 Snyk Security Scan
+      - name: Snyk Security Scan
         uses: snyk/actions/docker@master
         continue-on-error: true
         env:
@@ -236,15 +236,15 @@ jobs:
           args: --severity-threshold=high
 
   dependency-check:
-    name: 📦 Dependency Security Check
+    name: Dependency Security Check
     runs-on: ubuntu-latest
     needs: code-quality
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔍 OWASP Dependency Check
+      - name: OWASP Dependency Check
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'chat-devops'
@@ -252,7 +252,7 @@ jobs:
           format: 'HTML'
         continue-on-error: true
 
-      - name: 📤 Upload Results
+      - name: Upload Results
         uses: actions/upload-artifact@v3
         with:
           name: dependency-check-report
@@ -262,7 +262,7 @@ jobs:
   # STAGE 4: DEPLOY TO STAGING
   # ═══════════════════════════════════════════════════
   deploy-staging:
-    name: 🚀 Deploy to Staging
+    name: Deploy to Staging
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend, security-scan]
     if: github.ref == 'refs/heads/develop'
@@ -271,26 +271,26 @@ jobs:
       url: http://staging.chat-devops.com
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔐 Azure Login
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: ☸️ Set AKS Context
+      - name: Set AKS Context
         uses: azure/aks-set-context@v3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.AKS_CLUSTER }}
 
-      - name: ⎈ Setup Helm
+      - name: Setup Helm
         uses: azure/setup-helm@v3
         with:
           version: 'v3.13.0'
 
-      - name: 🚀 Deploy with Helm
+      - name: Deploy with Helm
         run: |
           helm upgrade --install chat-app-staging ./helm/chat-app \
             --set backend.image.repository=${{ env.ACR_LOGIN_SERVER }}/chat-backend \
@@ -302,19 +302,19 @@ jobs:
             --wait \
             --timeout 10m
 
-      - name: ✅ Deployment Success
+      - name: Deployment Success
         run: |
-          echo "## ✅ Staging Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "## Staging Deployment Successful" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 **Environment**: Staging" >> $GITHUB_STEP_SUMMARY
-          echo "📦 **Backend**: \`${{ needs.build-and-push.outputs.backend-tag }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "🖼️ **Frontend**: \`${{ needs.build-and-push.outputs.frontend-tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: Staging" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend**: \`${{ needs.build-and-push.outputs.backend-tag }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend**: \`${{ needs.build-and-push.outputs.frontend-tag }}\`" >> $GITHUB_STEP_SUMMARY
 
   # ═══════════════════════════════════════════════════
   # STAGE 5: DEPLOY TO PRODUCTION
   # ═══════════════════════════════════════════════════
   deploy-production:
-    name: 🚀 Deploy to Production
+    name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [test-backend, test-frontend, security-scan]
     if: github.ref == 'refs/heads/main'
@@ -323,33 +323,33 @@ jobs:
       url: http://4.178.25.91
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🔐 Azure Login
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: ☸️ Set AKS Context
+      - name: Set AKS Context
         uses: azure/aks-set-context@v3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.AKS_CLUSTER }}
 
-      - name: ⎈ Setup Helm
+      - name: Setup Helm
         uses: azure/setup-helm@v3
         with:
           version: 'v3.13.0'
 
-      - name: 💾 Backup Current Deployment
+      - name: Backup Current Deployment
         id: backup
         run: |
           BACKUP_TAG=$(date +%Y%m%d-%H%M%S)
           helm get values chat-app -n ${{ env.NAMESPACE_PROD }} > /tmp/backup-${BACKUP_TAG}.yaml || true
           echo "backup-tag=${BACKUP_TAG}" >> $GITHUB_OUTPUT
 
-      - name: 🚀 Deploy with Helm
+      - name: Deploy with Helm
         id: deploy
         run: |
           helm upgrade --install chat-app ./helm/chat-app \
@@ -362,7 +362,7 @@ jobs:
             --wait \
             --timeout 10m
 
-      - name: 🧪 Smoke Tests
+      - name: Smoke Tests
         id: smoke-tests
         run: |
           sleep 30
@@ -372,36 +372,36 @@ jobs:
           # Test backend health
           HEALTH_STATUS=$(curl -s http://${BACKEND_IP}:5000/api/health | jq -r '.status')
           if [ "$HEALTH_STATUS" != "ok" ]; then
-            echo "❌ Backend health check failed!"
+            echo "ERROR: Backend health check failed"
             exit 1
           fi
           
           # Test frontend
           FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://${FRONTEND_IP})
           if [ "$FRONTEND_STATUS" != "200" ]; then
-            echo "❌ Frontend health check failed!"
+            echo "ERROR: Frontend health check failed"
             exit 1
           fi
           
-          echo "✅ All smoke tests passed!"
+          echo "SUCCESS: All smoke tests passed"
 
-      - name: ↩️ Rollback on Failure
+      - name: Rollback on Failure
         if: failure() && steps.deploy.conclusion == 'failure'
         run: |
-          echo "🔄 Rolling back deployment..."
+          echo "Rolling back deployment..."
           helm rollback chat-app -n ${{ env.NAMESPACE_PROD }}
 
-      - name: ✅ Deployment Success
+      - name: Deployment Success
         if: success()
         run: |
-          echo "## 🎉 Production Deployment Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "## Production Deployment Successful" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "🔗 **Environment**: Production" >> $GITHUB_STEP_SUMMARY
-          echo "🌐 **Frontend**: http://4.178.25.91" >> $GITHUB_STEP_SUMMARY
-          echo "🔧 **Backend**: http://4.251.128.52:5000" >> $GITHUB_STEP_SUMMARY
-          echo "📊 **Grafana**: http://4.178.145.159:3000" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment**: Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Frontend**: http://4.178.25.91" >> $GITHUB_STEP_SUMMARY
+          echo "**Backend**: http://4.251.128.52:5000" >> $GITHUB_STEP_SUMMARY
+          echo "**Grafana**: http://4.178.145.159:3000" >> $GITHUB_STEP_SUMMARY
 
-      - name: 📢 Notify Deployment
+      - name: Notify Deployment
         uses: 8398a7/action-slack@v3
         if: always()
         continue-on-error: true
@@ -417,45 +417,45 @@ jobs:
   # STAGE 6: POST-DEPLOYMENT
   # ═══════════════════════════════════════════════════
   post-deployment-tests:
-    name: 🧪 Integration Tests (Production)
+    name: Integration Tests (Production)
     runs-on: ubuntu-latest
     needs: deploy-production
     if: github.ref == 'refs/heads/main'
     
     steps:
-      - name: 📥 Checkout code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🧪 Run E2E Tests
+      - name: Run E2E Tests
         run: |
           echo "Running E2E tests against production..."
           # Add your E2E test commands here
           # Example: npm run test:e2e
           
-      - name: 📊 Performance Tests
+      - name: Performance Tests
         run: |
           echo "Running performance tests..."
           # Add k6 or artillery tests here
 
-      - name: 🔍 OWASP ZAP Scan
+      - name: OWASP ZAP Scan
         uses: zaproxy/action-baseline@v0.10.0
         with:
           target: 'http://4.178.25.91'
         continue-on-error: true
 
   cleanup:
-    name: 🧹 Cleanup Old Images
+    name: Cleanup Old Images
     runs-on: ubuntu-latest
     needs: deploy-production
     if: github.ref == 'refs/heads/main'
     
     steps:
-      - name: 🔐 Azure Login
+      - name: Azure Login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: 🧹 Clean old ACR images
+      - name: Clean old ACR images
         run: |
           # Keep only last 5 images
           az acr repository show-tags --name ${{ env.ACR_NAME }} --repository chat-backend --orderby time_desc --output tsv | tail -n +6 | xargs -I {} az acr repository delete --name ${{ env.ACR_NAME }} --image chat-backend:{} --yes || true
