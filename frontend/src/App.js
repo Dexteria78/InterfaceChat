@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-// Use relative WebSocket URL to work through nginx proxy
-const WS_URL = process.env.REACT_APP_WS_URL || 
-  (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host + '/ws';
+const API_URL = process.env.REACT_APP_API_URL || 'http://4.251.128.52:5000';
+const WS_URL = process.env.REACT_APP_WS_URL || 'ws://4.251.128.52:5000';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -13,6 +11,7 @@ function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const websocketRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -21,20 +20,25 @@ function App() {
   useEffect(() => scrollToBottom(), [messages]);
 
   useEffect(() => {
+    // Charger l'historique des messages
     fetch(`${API_URL}/api/messages`)
       .then(res => res.json())
       .then(data => setMessages(data.messages || []))
       .catch(err => console.error('Error loading messages:', err));
 
+    // Créer une connexion WebSocket stable
     const websocket = new WebSocket(WS_URL);
+    websocketRef.current = websocket;
 
     websocket.onopen = () => {
-      console.log('WebSocket connected');
+      console.log('✅ WebSocket connected');
       setIsConnected(true);
     };
 
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      console.log('📩 WebSocket message received:', data);
+      
       if (data.type === 'new_message') {
         setMessages(prev => [...prev, data.message]);
         setIsLoading(false);
@@ -43,12 +47,22 @@ function App() {
       }
     };
 
+    websocket.onerror = (error) => {
+      console.error('❌ WebSocket error:', error);
+    };
+
     websocket.onclose = () => {
-      console.log('WebSocket disconnected');
+      console.log('⚠️ WebSocket disconnected');
       setIsConnected(false);
     };
 
-    return () => websocket.close();
+    // Nettoyer la connexion seulement au démontage du composant
+    return () => {
+      if (websocketRef.current) {
+        websocketRef.current.close();
+        websocketRef.current = null;
+      }
+    };
   }, []);
 
   const handleSubmit = async (e) => {

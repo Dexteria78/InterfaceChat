@@ -7,7 +7,7 @@ variable "resource_group_name" {
 variable "location" {
   description = "Région Azure"
   type        = string
-  default     = "westeurope"
+  default     = "francecentral"
 }
 
 variable "aks_cluster_name" {
@@ -25,7 +25,7 @@ variable "node_count" {
 variable "vm_size" {
   description = "Taille des VMs"
   type        = string
-  default     = "Standard_D2_v2"
+  default     = "Standard_B2s_v2"
 }
 
 variable "acr_name" {

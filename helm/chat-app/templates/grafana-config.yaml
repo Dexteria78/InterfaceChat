@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chat-app.fullname" . }}-grafana-datasources
+  labels:
+    {{- include "chat-app.labels" . | nindent 4 }}
+data:
+  datasource.yaml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://{{ include "chat-app.fullname" . }}-prometheus:9090
+      isDefault: true
+      editable: true
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chat-app.fullname" . }}-grafana-dashboards-config
+  labels:
+    {{- include "chat-app.labels" . | nindent 4 }}
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      updateIntervalSeconds: 10
+      allowUiUpdates: true
+      options:
+        path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "chat-app.fullname" . }}-grafana-dashboards
+  labels:
+    {{- include "chat-app.labels" . | nindent 4 }}
+data:
+  chat-app-dashboard.json: |-
+    {
+      "dashboard": {
+        "title": "Chat DevOps Dashboard",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Total Messages",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "sum(chat_messages_total)",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Messages par Type",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "chat_messages_total",
+                "legendFormat": "{{`{{type}}`}}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Ollama Response Time (95th percentile)",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(ollama_response_duration_seconds_bucket[5m]))",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Backend CPU Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{pod=~\".*backend.*\"}[5m])",
+                "legendFormat": "{{`{{pod}}`}}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Backend Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "container_memory_usage_bytes{pod=~\".*backend.*\"}",
+                "legendFormat": "{{`{{pod}}`}}",
+                "refId": "A"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ],
+        "refresh": "10s",
+        "schemaVersion": 27,
+        "style": "dark",
+        "tags": ["chat-devops"],
+        "timezone": "browser",
+        "uid": "chat-devops-main",
+        "version": 1
+      }
+    }
