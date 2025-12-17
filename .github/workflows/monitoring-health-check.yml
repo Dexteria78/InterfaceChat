@@ -1,5 +1,10 @@
 name: Surveillance Continue et Health Checks
 
+on:
+  schedule:
+    # Une fois par jour à 9h00 UTC (10h00 CET)
+    - cron: '0 9 * * *'
+  workflow_dispatch:
 
 env:
   AKS_CLUSTER: aks-chat-devops
