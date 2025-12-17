@@ -250,6 +250,8 @@ jobs:
     name: Deploiement sur AKS
     runs-on: ubuntu-latest
     needs: [construction-backend, construction-frontend, scan-securite-backend, scan-securite-frontend]
+    # Rendre le déploiement optionnel si les secrets Azure ne sont pas configurés
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment:
       name: production
       url: http://4.178.25.91
@@ -257,24 +259,42 @@ jobs:
       - name: Recuperation du code
         uses: actions/checkout@v4
 
+      - name: Verification des secrets Azure
+        id: check-secrets
+        run: |
+          if [ -z "${{ secrets.AZURE_CLIENT_ID }}" ] || [ -z "${{ secrets.AZURE_TENANT_ID }}" ] || [ -z "${{ secrets.AZURE_SUBSCRIPTION_ID }}" ]; then
+            echo "secrets-available=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Secrets Azure non configures - deploiement manuel requis"
+            echo "Les images Docker ont ete construites et pushees vers ACR avec succes"
+            echo "Pour deployer manuellement: helm upgrade --install chat-app ./helm/chat-app -n production"
+          else
+            echo "secrets-available=true" >> $GITHUB_OUTPUT
+          fi
+
       - name: Connexion Azure
+        if: steps.check-secrets.outputs.secrets-available == 'true'
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Configuration kubectl
+        if: steps.check-secrets.outputs.secrets-available == 'true'
         uses: azure/aks-set-context@v3
         with:
           resource-group: ${{ env.AKS_RG }}
           cluster-name: ${{ env.AKS_CLUSTER }}
 
       - name: Verification du cluster
+        if: steps.check-secrets.outputs.secrets-available == 'true'
         run: |
           echo "Verification de l'etat du cluster..."
           kubectl cluster-info
           kubectl get nodes
 
       - name: Deploiement avec Helm
+        if: steps.check-secrets.outputs.secrets-available == 'true'
         run: |
           echo "Deploiement de la nouvelle version..."
           helm upgrade --install chat-app ./helm/chat-app \
@@ -284,12 +304,14 @@ jobs:
             --wait --timeout=10m
 
       - name: Attente de la stabilisation
+        if: steps.check-secrets.outputs.secrets-available == 'true'
         run: |
           echo "Attente que les pods soient prets..."
           kubectl wait --for=condition=ready pod -l app=backend -n ${{ env.NAMESPACE }} --timeout=300s
           kubectl wait --for=condition=ready pod -l app=frontend -n ${{ env.NAMESPACE }} --timeout=300s
 
       - name: Etat des pods
+        if: steps.check-secrets.outputs.secrets-available == 'true'
         run: |
           echo "Etat final des deployments:"
           kubectl get pods -n ${{ env.NAMESPACE }} -o wide
@@ -298,11 +320,14 @@ jobs:
     name: Tests d'integration
     runs-on: ubuntu-latest
     needs: deploiement-aks
+    if: always() && needs.deploiement-aks.result == 'success'
     steps:
       - name: Connexion Azure
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Configuration kubectl
         uses: azure/aks-set-context@v3
@@ -353,11 +378,14 @@ jobs:
     name: Verification du monitoring
     runs-on: ubuntu-latest
     needs: deploiement-aks
+    if: always() && needs.deploiement-aks.result == 'success'
     steps:
       - name: Connexion Azure
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Configuration kubectl
         uses: azure/aks-set-context@v3
@@ -394,11 +422,14 @@ jobs:
     name: Verification Ollama et IA
     runs-on: ubuntu-latest
     needs: deploiement-aks
+    if: always() && needs.deploiement-aks.result == 'success'
     steps:
       - name: Connexion Azure
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Configuration kubectl
         uses: azure/aks-set-context@v3
