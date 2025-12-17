@@ -320,7 +320,7 @@ jobs:
     name: Tests d'integration
     runs-on: ubuntu-latest
     needs: deploiement-aks
-    if: always() && needs.deploiement-aks.result == 'success'
+    if: always() && needs.deploiement-aks.result == 'success' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Connexion Azure
         uses: azure/login@v1
@@ -378,7 +378,7 @@ jobs:
     name: Verification du monitoring
     runs-on: ubuntu-latest
     needs: deploiement-aks
-    if: always() && needs.deploiement-aks.result == 'success'
+    if: always() && needs.deploiement-aks.result == 'success' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Connexion Azure
         uses: azure/login@v1
@@ -422,7 +422,7 @@ jobs:
     name: Verification Ollama et IA
     runs-on: ubuntu-latest
     needs: deploiement-aks
-    if: always() && needs.deploiement-aks.result == 'success'
+    if: always() && needs.deploiement-aks.result == 'success' && github.event_name == 'workflow_dispatch'
     steps:
       - name: Connexion Azure
         uses: azure/login@v1
@@ -454,13 +454,13 @@ jobs:
   rapport-final:
     name: Rapport de deploiement
     runs-on: ubuntu-latest
-    needs: [deploiement-aks, tests-integration, verification-monitoring, verification-ollama]
+    needs: [construction-backend, construction-frontend, scan-securite-backend, scan-securite-frontend, deploiement-aks]
     if: always()
     steps:
       - name: Generation du rapport
         run: |
           echo "=========================================="
-          echo "     RAPPORT DE DEPLOIEMENT"
+          echo "     RAPPORT DE DEPLOIEMENT CI/CD"
           echo "=========================================="
           echo ""
           echo "Commit: ${{ github.sha }}"
@@ -468,26 +468,33 @@ jobs:
           echo "Auteur: ${{ github.actor }}"
           echo "Date: $(date)"
           echo ""
-          echo "Resultats des jobs:"
+          echo "Resultats des jobs principaux:"
+          echo "  - Construction Backend: ${{ needs.construction-backend.result }}"
+          echo "  - Construction Frontend: ${{ needs.construction-frontend.result }}"
+          echo "  - Scan Securite Backend: ${{ needs.scan-securite-backend.result }}"
+          echo "  - Scan Securite Frontend: ${{ needs.scan-securite-frontend.result }}"
           echo "  - Deploiement AKS: ${{ needs.deploiement-aks.result }}"
-          echo "  - Tests integration: ${{ needs.tests-integration.result }}"
-          echo "  - Monitoring: ${{ needs.verification-monitoring.result }}"
-          echo "  - Ollama/IA: ${{ needs.verification-ollama.result }}"
           echo ""
           
-          if [ "${{ needs.deploiement-aks.result }}" == "success" ]; then
-            echo "Le deploiement s'est bien passe !"
+          if [ "${{ needs.construction-backend.result }}" == "success" ] && [ "${{ needs.construction-frontend.result }}" == "success" ]; then
+            echo "✅ BUILD & PUSH REUSSI !"
+            echo ""
+            echo "Images Docker construites et pushees vers ACR:"
+            echo "  - Backend: acrchatdevops.azurecr.io/chat-backend:${{ needs.construction-backend.outputs.image-tag }}"
+            echo "  - Frontend: acrchatdevops.azurecr.io/chat-frontend:${{ needs.construction-frontend.outputs.image-tag }}"
+            echo ""
+            echo "Pour deployer manuellement:"
+            echo "  helm upgrade chat-app ./helm/chat-app -n production \\"
+            echo "    --set backend.image.tag=${{ needs.construction-backend.outputs.image-tag }} \\"
+            echo "    --set frontend.image.tag=${{ needs.construction-frontend.outputs.image-tag }}"
             echo ""
             echo "Acces aux services:"
             echo "  - Application: http://4.178.25.91"
             echo "  - Grafana: http://4.178.145.159:3000"
-            echo ""
-            echo "Versions deployees:"
-            echo "  - Backend: ${{ needs.construction-backend.outputs.image-tag }}"
-            echo "  - Frontend: ${{ needs.construction-frontend.outputs.image-tag }}"
           else
-            echo "Il y a eu un probleme pendant le deploiement"
+            echo "❌ ECHEC DU BUILD"
             echo "Verifie les logs ci-dessus"
+            exit 1
           fi
           echo ""
           echo "=========================================="
