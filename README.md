@@ -1,5 +1,6 @@
 #  Chat DevOps - Full Stack IA (chatbox)
 
+Le budget pour azure à été dépassé donc l'application ne fonctionne plus sur azure mais la CI/CD montre bien que l'applcation sur azure a fonctionné plusieurs semaines (à voir le healthcheck) 
 
 ###  Fonctionnalités
 
@@ -338,132 +339,51 @@ terraform output
 
 ### **Mesures Implémentées**
 
-✅ **Scan de Vulnérabilités** : Trivy dans le pipeline CI/CD
-✅ **Secrets Management** : Azure Key Vault pour credentials
-✅ **Network Policies** : Isolation des pods (à configurer)
-✅ **RBAC** : Service Accounts Kubernetes avec permissions limitées
-✅ **Image Signing** : Possibilité d'activer Cosign
-✅ **OWASP** : Dependency Check automatique
-✅ **HTTPS** : Possibilité d'activer avec cert-manager (Let's Encrypt)
+ **Scan de Vulnérabilités** : Trivy dans le pipeline CI/CD
+ **Secrets Management** : Azure Key Vault pour credentials
+ **Network Policies** : Isolation des pods (à configurer)
+ **RBAC** : Service Accounts Kubernetes avec permissions limitées
+ **Image Signing** : Possibilité d'activer Cosign
+ **OWASP** : Dependency Check automatique
+ **HTTPS** : Possibilité d'activer avec cert-manager (Let's Encrypt)
 
 ---
 
 ##  Documentation
 
 
-### **Commandes Utiles**
-
-```bash
-# ═══════════════════════════════════════════════════════
-# DÉVELOPPEMENT LOCAL
-# ═══════════════════════════════════════════════════════
-
-# Démarrer tous les services
-docker-compose up -d
-
-# Voir les logs en temps réel
-docker-compose logs -f
-
-# Arrêter et nettoyer
-docker-compose down -v
-
-# Rebuild après modifications
-docker-compose up -d --build
-
-# ═══════════════════════════════════════════════════════
-# KUBERNETES (PRODUCTION)
-# ═══════════════════════════════════════════════════════
-
-# Pods
-kubectl get pods -n production
-kubectl logs -f <pod-name> -n production
-kubectl describe pod <pod-name> -n production
-kubectl exec -it <pod-name> -n production -- /bin/sh
-
-# Services
-kubectl get svc -n production
-kubectl describe svc chat-app-frontend -n production
-
-# Déploiements
-kubectl get deployments -n production
-kubectl rollout status deployment/chat-app-backend -n production
-kubectl rollout restart deployment/chat-app-backend -n production
-
-# Helm
-helm list -n production
-helm history chat-app -n production
-helm rollback chat-app <revision> -n production
-
-# HPA
-kubectl get hpa -n production
-kubectl describe hpa chat-app-backend-hpa -n production
-
-# ═══════════════════════════════════════════════════════
-# MONITORING
-# ═══════════════════════════════════════════════════════
-
-# Forward Grafana localement (si besoin)
-kubectl port-forward -n production svc/chat-app-grafana 3000:3000
-
-# Forward Prometheus
-kubectl port-forward -n production svc/chat-app-prometheus 9090:9090
-
-# Métriques backend directement
-curl http://4.251.128.52:5000/metrics
-
-# ═══════════════════════════════════════════════════════
-# DEBUGGING
-# ═══════════════════════════════════════════════════════
-
-# Vérifier les événements
-kubectl get events -n production --sort-by='.lastTimestamp'
-
-# Vérifier la configuration
-kubectl get configmap -n production
-kubectl describe configmap chat-app-prometheus-config -n production
-
-# Tester la connectivité interne
-kubectl run -it --rm debug --image=curlimages/curl --restart=Never -n production -- \
-  curl http://chat-app-backend:5000/api/health
-```
-
----
-
-##  Documentation Pédagogique
-
-
-1. **Architecture Microservices** ✅
+1. **Architecture Microservices** 
    - Frontend, Backend, AI séparés
    - Communication via API REST + WebSocket
 
-2. **Containerisation** ✅
+2. **Containerisation** 
    - Docker multi-stage builds
    - Optimisation des images (Alpine Linux)
    - docker-compose pour orchestration locale
 
-3. **Orchestration Kubernetes** ✅
+3. **Orchestration Kubernetes** 
    - Deployments avec replicas
    - Services (ClusterIP + LoadBalancer)
    - HPA (Horizontal Pod Autoscaler)
    - ConfigMaps et Secrets
 
-4. **Infrastructure as Code** ✅
+4. **Infrastructure as Code** 
    - Terraform pour Azure
    - Helm Charts pour Kubernetes
    - GitOps avec versioning
 
-5. **CI/CD** ✅
+5. **CI/CD** 
    - Pipeline multi-stages
    - Tests automatisés
    - Security scans
    - Déploiement automatique
 
-6. **Monitoring & Observability** ✅
+6. **Monitoring & Observability** 
    - Prometheus pour métriques
    - Grafana pour visualisation
    - Logs centralisés
 
-7. **Cloud Native** ✅
+7. **Cloud Native** 
    - Scalabilité horizontale
    - Health checks
    - Rolling updates
