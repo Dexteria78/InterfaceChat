@@ -1,5 +1,7 @@
 #  Chat DevOps - Full Stack IA (chatbox)
 
+##  Important
+Réalisé par: Jovany, Nassim, Ruchebe, Nicolas
 Le budget pour azure à été dépassé donc l'application ne fonctionne plus sur azure mais la CI/CD montre bien que l'applcation sur azure a fonctionné plusieurs semaines (à voir le healthcheck) 
 
 ###  Fonctionnalités
